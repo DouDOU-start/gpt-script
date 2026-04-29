@@ -1,0 +1,8 @@
+bin/
+results/
+screenshots/
+backups/
+.playwright-mcp/
+config.yaml
+codes.txt
+*.log

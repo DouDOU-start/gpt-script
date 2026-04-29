@@ -1,0 +1,11 @@
+# 浏览器后端：local 使用本机 Chrome/Chromium，docker 使用 Docker 容器
+browser_backend: docker
+browser_image: chromedp/headless-shell:latest
+browser_headless: true
+
+# docker 后端使用；local 后端可保留默认值
+docker_hosts:
+  - name: 本地 Docker
+    url: unix:///var/run/docker.sock
+    max_containers: 2
+    enabled: true

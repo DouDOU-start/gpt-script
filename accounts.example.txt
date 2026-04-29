@@ -1,0 +1,5 @@
+# 支持三种格式：
+# email----password
+# email,password
+# {"email":"user@example.com","password":"password"}
+user@example.com----change-me
