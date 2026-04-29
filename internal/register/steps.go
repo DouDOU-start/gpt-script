@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -292,6 +293,13 @@ func (r *ChatGPTRegister) inputPassword() error {
 		r.sendScreenshot(fmt.Sprintf("准备输入密码（第 %d 次）", attempt))
 		log.Printf("[%s] 输入密码 (长度: %d, 第 %d 次)", r.taskID, len(r.password), attempt)
 		if err := r.browser.TypeFast(`input[type="password"]`, r.password); err != nil {
+			if isBrowserContextLostError(err) {
+				state = r.waitForContextRecovery(5 * time.Second)
+				if isPostPasswordState(state) {
+					log.Printf("[%s] 密码输入时页面已进入后续状态，继续流程: %s", r.taskID, state)
+					return nil
+				}
+			}
 			return fmt.Errorf("输入密码失败: %w", err)
 		}
 
@@ -299,6 +307,13 @@ func (r *ChatGPTRegister) inputPassword() error {
 		r.sendScreenshot("已输入密码")
 
 		if err := clickContinueButton(r.browser); err != nil {
+			if isBrowserContextLostError(err) {
+				state = r.waitForContextRecovery(5 * time.Second)
+				if isPostPasswordState(state) {
+					log.Printf("[%s] 密码提交时页面已进入后续状态，继续流程: %s", r.taskID, state)
+					return nil
+				}
+			}
 			return err
 		}
 
@@ -319,6 +334,32 @@ func (r *ChatGPTRegister) inputPassword() error {
 	}
 
 	return fmt.Errorf("密码提交后仍停留密码页")
+}
+
+func (r *ChatGPTRegister) waitForContextRecovery(timeout time.Duration) RegisterPageState {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		state := detectRegisterState(r.browser, r.email)
+		if state != RegisterStateUnknown {
+			return state
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return detectRegisterState(r.browser, r.email)
+}
+
+func isBrowserContextLostError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "Cannot find context with specified id") ||
+		strings.Contains(message, "Execution context was destroyed") ||
+		strings.Contains(message, "Target closed")
+}
+
+func isPostPasswordState(state RegisterPageState) bool {
+	return state == RegisterStateVerification || state == RegisterStatePersonalInfo || state == RegisterStateMain || state == RegisterStateWorkspace
 }
 
 func (r *ChatGPTRegister) waitForPasswordSubmitResult(timeout time.Duration) (RegisterPageState, error) {
@@ -575,29 +616,6 @@ func (r *ChatGPTRegister) waitForVerificationResult() error {
 				r.sendScreenshot("验证码错误")
 				return fmt.Errorf("验证码错误")
 			}
-
-			// 检查输入框附近的错误样式
-			hasError := false
-			_ = r.browser.Eval(`() => {
-				const selectors = ['input[name="code"]', 'input[type="text"][inputmode="numeric"]', 'input[autocomplete="one-time-code"]'];
-				let codeInput = null;
-				for (const sel of selectors) {
-					codeInput = document.querySelector(sel);
-					if (codeInput) break;
-				}
-				if (!codeInput) return false;
-				const form = codeInput.closest('form');
-				if (form) {
-					const errorInForm = form.querySelector('[class*="error" i], [class*="invalid" i]');
-					if (errorInForm) return true;
-				}
-				return false;
-			}`, &hasError)
-			if hasError {
-				log.Printf("[%s] 验证码输入框显示错误", r.taskID)
-				r.sendScreenshot("验证失败，页面显示错误")
-				return fmt.Errorf("验证失败，页面显示错误")
-			}
 		}
 
 		time.Sleep(checkInterval)
@@ -786,16 +804,14 @@ func (r *ChatGPTRegister) fillPersonalInfo() error {
 	}
 
 	if r.browser.IsVisible(`input[name="age"]`) {
-		log.Printf("[%s] 填写年龄", r.taskID)
-		if err := r.browser.TypeFast(`input[name="age"]`, "19"); err != nil {
+		age := birthdayAge(r.personalInfo.Birthday)
+		log.Printf("[%s] 填写年龄: %d", r.taskID, age)
+		if err := r.setAgeInput(age); err != nil {
 			return fmt.Errorf("填写年龄失败: %w", err)
 		}
 		RandomDelay(300, 500)
-	}
-
-	// 填写生日（顺序：月/日/年）
-	// 兼容旧版 spinbutton 和新版 select 下拉框
-	if r.browser.IsVisible(`[role="spinbutton"]`) {
+		r.sendScreenshot("已填写年龄: " + strconv.Itoa(age))
+	} else if r.browser.IsVisible(`[role="spinbutton"]`) {
 		// 旧版：spinbutton 输入框
 		log.Printf("[%s] 填写生日(spinbutton): %s/%s/%s", r.taskID,
 			r.personalInfo.Birthday.Month, r.personalInfo.Birthday.Day, r.personalInfo.Birthday.Year)
@@ -813,7 +829,7 @@ func (r *ChatGPTRegister) fillPersonalInfo() error {
 		birthdayStr := fmt.Sprintf("%s/%s/%s",
 			r.personalInfo.Birthday.Month, r.personalInfo.Birthday.Day, r.personalInfo.Birthday.Year)
 		r.sendScreenshot("已填写生日: " + birthdayStr)
-	} else if r.browser.IsVisible(`input[name="birthday"]`) || r.browser.IsVisible(`[data-testid="hidden-select-container"] select`) {
+	} else if hasBirthdaySelects(r.browser) {
 		// 新版：select 下拉框（隐藏在 hidden-select-container 内）
 		// select option value 不带前导零，需要转换
 		monthNum := strings.TrimLeft(r.personalInfo.Birthday.Month, "0")
@@ -876,4 +892,45 @@ func (r *ChatGPTRegister) fillPersonalInfo() error {
 	}
 
 	return fmt.Errorf("等待跳转到主页超时")
+}
+
+func (r *ChatGPTRegister) setAgeInput(age int) error {
+	return r.browser.Eval(fmt.Sprintf(`() => {
+		const input = document.querySelector('input[name="age"]');
+		if (!input) throw new Error('age input not found');
+		const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+		descriptor.set.call(input, %q);
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+	}`, strconv.Itoa(age)), nil)
+}
+
+func birthdayAge(b Birthday) int {
+	year, err := strconv.Atoi(b.Year)
+	if err != nil || year <= 0 {
+		return 19
+	}
+	month, err := strconv.Atoi(b.Month)
+	if err != nil || month < 1 || month > 12 {
+		month = 1
+	}
+	day, err := strconv.Atoi(b.Day)
+	if err != nil || day < 1 || day > 31 {
+		day = 1
+	}
+	now := time.Now()
+	age := now.Year() - year
+	if now.Month() < time.Month(month) || (now.Month() == time.Month(month) && now.Day() < day) {
+		age--
+	}
+	if age < 19 || age > 130 {
+		return 19
+	}
+	return age
+}
+
+func hasBirthdaySelects(b *automation.Manager) bool {
+	var count int
+	_ = b.Eval(`() => document.querySelectorAll('[data-testid="hidden-select-container"] select').length`, &count)
+	return count >= 3
 }

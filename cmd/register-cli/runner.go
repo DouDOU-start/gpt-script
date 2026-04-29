@@ -98,9 +98,6 @@ func runOne(ctx context.Context, acc accountInput, dockerPool *dockerpool.Pool, 
 	if rc.mode == "oauth" {
 		return runOAuthOne(ctx, acc, rc, result, proxyURL)
 	}
-	if rc.mode == "register" {
-		return runProtocolRegisterOne(ctx, acc, rc, result, proxyURL)
-	}
 
 	reg := register.New(ctx, dockerPool, yamlCfg, register.Options{
 		TaskID:      taskID,
