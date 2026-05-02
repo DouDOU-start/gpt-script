@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>账号注册控制台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Local Account Console</p>
+        <h1>账号注册与授权控制台</h1>
+        <p class="muted">查看账号库，选择账号并启动注册、登录或 OAuth 授权任务。</p>
+      </div>
+      <button id="refreshAccounts" class="ghost">刷新账号</button>
+    </header>
+
+    <section class="grid">
+      <section class="panel accounts-panel">
+        <div class="panel-head">
+          <div>
+            <h2>账号</h2>
+            <p id="accountCount" class="muted">未加载</p>
+          </div>
+          <div class="filters">
+            <input id="searchEmail" type="search" placeholder="搜索邮箱">
+            <select id="statusFilter">
+              <option value="">全部状态</option>
+              <option value="active" selected>active</option>
+              <option value="banned">banned</option>
+            </select>
+            <input id="limitFilter" type="number" min="1" value="100" title="加载数量">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input id="selectAll" type="checkbox"></th>
+                <th>ID</th>
+                <th>邮箱</th>
+                <th>状态</th>
+                <th>最近操作</th>
+                <th>错误</th>
+                <th>更新时间</th>
+              </tr>
+            </thead>
+            <tbody id="accountsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="panel launcher-panel">
+        <h2>启动操作</h2>
+        <label>模式
+          <select id="mode">
+            <option value="oauth">OAuth 授权</option>
+            <option value="login">登录</option>
+            <option value="register">注册</option>
+          </select>
+        </label>
+        <label>账号来源
+          <select id="sourceMode">
+            <option value="selected">已选账号</option>
+            <option value="status">按状态批量</option>
+          </select>
+        </label>
+        <div class="two-col">
+          <label>状态
+            <select id="runStatus">
+              <option value="active" selected>active</option>
+              <option value="banned">banned</option>
+            </select>
+          </label>
+          <label>数量
+            <input id="runLimit" type="number" min="1" value="10">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>并发
+            <input id="workers" type="number" min="1" value="1">
+          </label>
+          <label>浏览器后端
+            <select id="backend">
+              <option value="">配置默认</option>
+              <option value="local">local</option>
+              <option value="docker">docker</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="headless" type="checkbox" checked> 无头浏览器</label>
+        <label class="check"><input id="includeSecrets" type="checkbox" checked> 写入敏感结果</label>
+        <label>代理
+          <input id="proxy" type="text" placeholder="http://user:pass@host:port">
+        </label>
+        <label>Workspace ID
+          <input id="workspaceId" type="text" placeholder="OAuth 可选">
+        </label>
+        <label>Organization ID
+          <input id="organizationId" type="text" placeholder="OAuth 可选">
+        </label>
+        <button id="startRun" class="primary">启动</button>
+        <p id="launcherMessage" class="message"></p>
+      </aside>
+    </section>
+
+    <section class="panel monitor-panel">
+      <div class="panel-head">
+        <div>
+          <h2>运行监控</h2>
+          <p id="runMeta" class="muted">暂无运行</p>
+        </div>
+        <button id="stopRun" class="danger" disabled>停止当前运行</button>
+      </div>
+      <div id="summary" class="summary"></div>
+      <div id="events" class="events"></div>
+    </section>
+  </main>
+
+  <template id="eventTemplate">
+    <article class="event">
+      <span class="event-time"></span>
+      <strong class="event-stage"></strong>
+      <span class="event-status"></span>
+      <p class="event-detail"></p>
+    </article>
+  </template>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>

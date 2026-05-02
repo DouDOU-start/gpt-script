@@ -15,6 +15,7 @@
 ## 环境要求
 
 - Go 1.24+
+- Node.js 20.19+ 或 22.12+（仅 Web 前端开发/构建需要）
 - 本机模式需要 Chrome/Chromium
 - Docker 模式需要可用 Docker 环境
 
@@ -22,9 +23,10 @@
 
 ```bash
 go mod download
+npm --prefix web install
 ```
 
-也可以使用 Makefile：
+也可以使用 Makefile 整理 Go 依赖：
 
 ```bash
 make tidy
@@ -67,20 +69,20 @@ user@example.com,password
 {"email":"user@example.com","password":"password"}
 ```
 
-可以参考 `accounts.example.txt`。
+保存为 `accounts.txt` 后通过 `-accounts accounts.txt` 使用。
 
 ## 运行方式
 
 查看命令参数：
 
 ```bash
-go run ./cmd/register-cli -h
+go run ./backend/cmd/register-cli -h
 ```
 
 随机生成账号并注册：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -mode register \
   -generate 1 \
   -domain example.com \
@@ -90,7 +92,7 @@ go run ./cmd/register-cli \
 使用账号文件批量注册：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -mode register \
   -accounts accounts.txt \
   -workers 1
@@ -99,7 +101,7 @@ go run ./cmd/register-cli \
 登录已有账号：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -mode login \
   -backend local \
   -email "user@example.com" \
@@ -109,7 +111,7 @@ go run ./cmd/register-cli \
 执行 OAuth 授权：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -mode oauth \
   -email "user@example.com" \
   -password "your-password"
@@ -118,7 +120,7 @@ go run ./cmd/register-cli \
 使用代理：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -accounts accounts.txt \
   -proxy "http://user:pass@host:port"
 ```
@@ -126,7 +128,7 @@ go run ./cmd/register-cli \
 指定 Docker 主机白名单：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -backend docker \
   -accounts accounts.txt \
   -prefer-hosts "本地 Docker" \
@@ -147,7 +149,7 @@ another@example.com=654321
 运行时指定验证码文件：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -accounts accounts.txt \
   -codes codes.txt
 ```
@@ -169,7 +171,7 @@ screenshots/
 结果中默认包含 cookies、access token、password 等敏感字段。共享结果文件前可以关闭敏感字段输出：
 
 ```bash
-go run ./cmd/register-cli \
+go run ./backend/cmd/register-cli \
   -accounts accounts.txt \
   -include-secrets=false
 ```
@@ -198,16 +200,35 @@ go run ./cmd/register-cli \
 | `-include-secrets` | `true` | 是否输出敏感字段 |
 | `-interactive` | `true` | 是否允许控制台输入验证码 |
 
+## Web 管理页面
+
+后端 Web API 默认监听本机地址，前端开发服务器会代理 `/api`：
+
+```bash
+make dev
+```
+
+也可以分别启动：
+
+```bash
+go run ./backend/cmd/register-cli -web -web-addr 127.0.0.1:8080 -db data/accounts.db
+make web-dev
+```
+
 ## Makefile
 
 ```bash
-make build    # 构建 bin/register-cli
-make run      # 运行 go run ./cmd/register-cli
-make test     # 运行 go test ./...
-make vet      # 运行 go vet ./...
-make fmt      # 格式化 cmd/internal
-make tidy     # 整理 Go 依赖
-make clean    # 删除 bin/
+make build      # 构建 Web 静态资源并生成 bin/register-cli
+make go-build   # 使用已有 Web 构建输出生成 Go 二进制
+make web-build  # 构建 React/Vite Web 静态资源
+make web-dev    # 启动 Vite 前端开发服务器
+make dev        # 同时启动 Go Web 后端和 Vite 前端
+make run        # 运行 go run ./backend/cmd/register-cli
+make test       # 运行 go test ./backend/cmd/... ./backend/internal/...
+make vet        # 运行 go vet ./backend/cmd/... ./backend/internal/...
+make fmt        # 格式化 backend/cmd 和 backend/internal
+make tidy       # 整理 Go 依赖
+make clean      # 删除 bin/ 和 Web 构建输出
 ```
 
 ## 构建
@@ -232,5 +253,5 @@ bin/register-cli
 
 - 本机调试建议使用 `-backend local`。
 - 批量运行建议使用 Docker 后端并按机器资源调整 `-workers`。
-- `results/`、`screenshots/`、`backups/`、`config.yaml`、`codes.txt` 默认不会提交到 Git。
+- `results/`、`screenshots/`、`backups/`、`runs/`、`data/`、`config.yaml`、`codes.txt` 默认不会提交到 Git。
 - 输出结果可能包含敏感字段，不要公开共享未脱敏的 JSONL 文件。
